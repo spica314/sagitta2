@@ -1,0 +1,16 @@
+[package]
+name = "sagitta2-raft"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+tonic = { workspace = true }
+tonic-build = { workspace = true }
+prost = { workspace = true }
+rand = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
