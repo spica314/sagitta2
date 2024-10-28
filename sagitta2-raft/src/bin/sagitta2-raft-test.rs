@@ -1,6 +1,6 @@
-// cargo run -- 1 'http://[::1]:45002' 'http://[::1]:45003'
-// cargo run -- 2 'http://[::1]:45001' 'http://[::1]:45003'
-// cargo run -- 3 'http://[::1]:45001' 'http://[::1]:45002'
+// RUST_LOG=info cargo run -- 1 'http://[::1]:45002' 'http://[::1]:45003'
+// RUST_LOG=info cargo run -- 2 'http://[::1]:45001' 'http://[::1]:45003'
+// RUST_LOG=info cargo run -- 3 'http://[::1]:45001' 'http://[::1]:45002'
 
 use sagitta2_raft::RaftState;
 
