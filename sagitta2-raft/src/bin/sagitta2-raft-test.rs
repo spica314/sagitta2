@@ -2,6 +2,7 @@
 // RUST_LOG=info cargo run -- 2 'http://[::1]:45001' 'http://[::1]:45003'
 // RUST_LOG=info cargo run -- 3 'http://[::1]:45001' 'http://[::1]:45002'
 
+use rand::prelude::*;
 use sagitta2_raft::RaftState;
 
 #[tokio::main]
@@ -18,10 +19,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    let addr = format!("[::1]:4500{}", id).parse()?;
-    let raft_state = RaftState::new(id, other_servers).await;
+    let rng = thread_rng();
+    let rng2 = StdRng::from_rng(rng).unwrap();
+    let raft_state = RaftState::new(id, other_servers, rng2).await;
 
-    raft_state.run(addr).await?;
+    {
+        let raft_state = raft_state.clone();
+        tokio::spawn(async move {
+            let addr = format!("[::1]:4500{}", id).parse().unwrap();
+            raft_state.run(addr).await.unwrap();
+        });
+    }
 
-    Ok(())
+    let mut rng = thread_rng();
+    loop {
+        let wait_time = rng.gen_range(100..200);
+        tokio::time::sleep(std::time::Duration::from_millis(wait_time)).await;
+
+        let r = raft_state.append_log(vec![vec![rng.gen::<u8>(); 10]]).await;
+        if r.is_err() {
+            log::info!("append log failed: {:?}", r.err());
+        }
+    }
 }
