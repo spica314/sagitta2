@@ -1,6 +1,6 @@
 pub mod raft_state_inner;
 
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rand::prelude::*;
 use sagitta2_raft::raft_client::RaftClient;
 use std::collections::HashMap;
@@ -45,6 +45,12 @@ pub enum RaftError {
     Unknown,
 }
 
+#[derive(Debug, Clone)]
+pub enum SendAppendEntriesWithIndexError {
+    NoEntry,
+    NoPrevEntry,
+}
+
 impl RaftState {
     pub async fn new(id: i64, other_servers: Vec<(i64, String)>, rng: StdRng) -> RaftState {
         RaftState {
@@ -60,9 +66,69 @@ impl RaftState {
         inner.role() == RaftRole::Leader
     }
 
+    pub async fn send_append_entries_with_index(
+        &self,
+        client: &mut RaftClient<tonic::transport::Channel>,
+        begin_index: i64,
+        end_index: i64,
+        leader_id: i64,
+        current_term: i64,
+        leader_commit: i64,
+    ) -> Result<Result<AppendEntriesReply, Status>, SendAppendEntriesWithIndexError> {
+        let (prev_log_index, prev_log_term) = {
+            let inner = self.inner.lock().await;
+            if begin_index == 1 {
+                (0, 0)
+            } else {
+                let prev = inner.log().get(&(begin_index - 1));
+                if prev.is_none() {
+                    return Err(SendAppendEntriesWithIndexError::NoPrevEntry);
+                }
+                let (prev_term, _) = prev.unwrap();
+                (begin_index - 1, *prev_term)
+            }
+        };
+
+        let mut entries = vec![];
+        {
+            let inner = self.inner.lock().await;
+            for i in begin_index..end_index {
+                let (term, entry) = {
+                    let t = inner
+                        .log()
+                        .get(&i)
+                        .map(|(term, entry)| (*term, entry.clone()));
+                    if t.is_none() {
+                        return Err(SendAppendEntriesWithIndexError::NoEntry);
+                    }
+                    t.unwrap()
+                };
+                entries.push(LogEntry {
+                    index: i,
+                    term,
+                    command: entry,
+                });
+            }
+        }
+
+        let request = AppendEntriesRequest {
+            term: current_term,
+            leader_id,
+            prev_log_index,
+            prev_log_term,
+            entries,
+            leader_commit,
+        };
+        if let Ok(reply) = client.append_entries(request).await {
+            return Ok(Ok(reply.into_inner()));
+        }
+
+        Ok(Err(Status::internal("Failed to send append entries")))
+    }
+
     pub async fn append_log(&self, entries: Vec<Vec<u8>>) -> Result<(), RaftError> {
         // leader check
-        let (current_term, prev_log_index, prev_log_term, commit_index) = {
+        let (current_term, prev_log_index, commit_index) = {
             let mut inner = self.inner.lock().await;
             if inner.role() != RaftRole::Leader {
                 return Err(RaftError::NotLeader);
@@ -89,38 +155,170 @@ impl RaftState {
 
             let commit_index = inner.commit_index();
 
-            (current_term, prev_log_index, prev_log_term, commit_index)
+            (current_term, prev_log_index, commit_index)
         };
 
         let mut vote = 1;
         for (_, server_addr) in &self.other_servers {
             if let Ok(mut client) = RaftClient::connect(server_addr.clone()).await {
-                let mut entries2 = vec![];
-                for (i, entry) in entries.iter().enumerate() {
-                    entries2.push(LogEntry {
-                        index: prev_log_index + i as i64 + 1,
-                        term: current_term,
-                        command: entry.clone(),
-                    });
+                let r = self
+                    .send_append_entries_with_index(
+                        &mut client,
+                        prev_log_index + 1,
+                        prev_log_index + 1 + entries.len() as i64,
+                        self.id,
+                        current_term,
+                        commit_index,
+                    )
+                    .await;
+
+                if let Err(e) = r {
+                    error!("append_log: failed to send append entries: {:?}", e);
+                    continue;
                 }
-                let request = AppendEntriesRequest {
-                    term: current_term,
-                    leader_id: self.id,
-                    prev_log_index,
-                    prev_log_term,
-                    entries: entries2,
-                    leader_commit: commit_index,
-                };
-                if let Ok(reply) = client.append_entries(request).await {
-                    let reply = reply.into_inner();
-                    if reply.term > current_term {
-                        let mut inner = self.inner.lock().await;
-                        inner.set_role(RaftRole::Follower);
-                        inner.update_current_term(reply.term, Some(self.id));
-                        break;
+
+                let r = r.unwrap();
+
+                if let Err(e) = r {
+                    error!("append_log: failed to send append entries: {:?}", e);
+                    continue;
+                }
+
+                let reply = r.unwrap();
+                // let reply = reply.into_inner();
+                if reply.term > current_term {
+                    let mut inner = self.inner.lock().await;
+                    inner.set_role(RaftRole::Follower);
+                    inner.update_current_term(reply.term, Some(self.id));
+                    break;
+                }
+                if reply.success {
+                    vote += 1;
+                } else {
+                    let mut ok = true;
+                    let mut begin = None;
+                    for index in (0..=prev_log_index).rev() {
+                        let r = self
+                            .send_append_entries_with_index(
+                                &mut client,
+                                index,
+                                index + 1,
+                                self.id,
+                                current_term,
+                                commit_index,
+                            )
+                            .await;
+
+                        if let Err(e) = r {
+                            error!("append_log: failed to send append entries: {:?}", e);
+                            ok = false;
+                            break;
+                        }
+
+                        let r = r.unwrap();
+
+                        if let Err(e) = r {
+                            error!("append_log: failed to send append entries: {:?}", e);
+                            ok = false;
+                            break;
+                        }
+
+                        let reply = r.unwrap();
+
+                        if reply.term > current_term {
+                            let mut inner = self.inner.lock().await;
+                            inner.set_role(RaftRole::Follower);
+                            inner.update_current_term(reply.term, Some(self.id));
+                            break;
+                        }
+
+                        if reply.success {
+                            ok = true;
+                            begin = Some(index);
+                            break;
+                        }
                     }
-                    if reply.success {
-                        vote += 1;
+
+                    if ok {
+                        let begin = begin.unwrap();
+                        let mut ok2 = true;
+                        for index in begin + 1..=prev_log_index {
+                            let r = self
+                                .send_append_entries_with_index(
+                                    &mut client,
+                                    index,
+                                    index + 1,
+                                    self.id,
+                                    current_term,
+                                    commit_index,
+                                )
+                                .await;
+
+                            if let Err(e) = r {
+                                error!("append_log: failed to send append entries: {:?}", e);
+                                ok2 = false;
+                                break;
+                            }
+
+                            let r = r.unwrap();
+
+                            if let Err(e) = r {
+                                error!("append_log: failed to send append entries: {:?}", e);
+                                ok2 = false;
+                                break;
+                            }
+
+                            let reply = r.unwrap();
+
+                            if reply.term > current_term {
+                                let mut inner = self.inner.lock().await;
+                                inner.set_role(RaftRole::Follower);
+                                inner.update_current_term(reply.term, Some(self.id));
+                                ok2 = false;
+                                break;
+                            }
+
+                            if !reply.success {
+                                ok2 = false;
+                                break;
+                            }
+                        }
+
+                        if ok2 {
+                            let r = self
+                                .send_append_entries_with_index(
+                                    &mut client,
+                                    prev_log_index + 1,
+                                    prev_log_index + 1 + entries.len() as i64,
+                                    self.id,
+                                    current_term,
+                                    commit_index,
+                                )
+                                .await;
+
+                            if let Err(e) = r {
+                                error!("append_log: failed to send append entries: {:?}", e);
+                                continue;
+                            }
+
+                            let r = r.unwrap();
+
+                            if let Err(e) = r {
+                                error!("append_log: failed to send append entries: {:?}", e);
+                                continue;
+                            }
+
+                            let reply = r.unwrap();
+                            if reply.term > current_term {
+                                let mut inner = self.inner.lock().await;
+                                inner.set_role(RaftRole::Follower);
+                                inner.update_current_term(reply.term, Some(self.id));
+                                break;
+                            }
+                            if reply.success {
+                                vote += 1;
+                            }
+                        }
                     }
                 }
             }
@@ -130,6 +328,11 @@ impl RaftState {
             let mut inner = self.inner.lock().await;
             inner.update_commit_index(prev_log_index + entries.len() as i64);
             info!("commit index = {}", inner.commit_index());
+        } else {
+            error!("append_log: failed to get majority votes");
+            let mut inner = self.inner.lock().await;
+            inner.set_role(RaftRole::Follower);
+            return Err(RaftError::Unknown);
         }
 
         Ok(())
@@ -289,6 +492,7 @@ impl Raft for RaftState {
                 success: false,
             };
             debug!("append_entries: Replying {:?}", reply);
+            warn!("append_entries: term < current_term");
             return Ok(Response::new(reply));
         }
 
@@ -303,6 +507,7 @@ impl Raft for RaftState {
                 success: false,
             };
             debug!("append_entries: Replying {:?}", reply);
+            warn!("append_entries: check_term failed");
             return Ok(Response::new(reply));
         }
 
@@ -340,7 +545,7 @@ impl Raft for RaftState {
             success: true,
         };
         debug!("append_entries: Replying {:?}", reply);
-        Ok(Response::new(reply)) // Send back our formatted greeting
+        Ok(Response::new(reply))
     }
 
     async fn request_vote(
@@ -359,6 +564,7 @@ impl Raft for RaftState {
                 vote_granted: false,
             });
             debug!("request_vote: Replying {:?}", res);
+            warn!("request_vote: term < current_term");
             return Ok(res);
         }
 
@@ -397,6 +603,7 @@ impl Raft for RaftState {
             vote_granted: false,
         });
         debug!("request_vote: Replying {:?}", res);
+        warn!("request_vote: vote not granted");
         Ok(res)
     }
 }
