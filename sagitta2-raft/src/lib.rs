@@ -54,18 +54,31 @@ pub enum AppendEntriesWithIndexError {
 }
 
 impl RaftState {
-    pub async fn new(id: i64, other_servers: Vec<(i64, String)>, rng: StdRng) -> RaftState {
+    pub async fn new(id: i64, other_servers: Vec<(i64, String)>) -> RaftState {
+        let rng1 = thread_rng();
+        let rng2 = StdRng::from_rng(rng1).unwrap();
+
         RaftState {
             id,
             other_servers,
 
-            inner: Arc::new(Mutex::new(RaftStateInner::new(rng))),
+            inner: Arc::new(Mutex::new(RaftStateInner::new(rng2))),
         }
     }
 
     pub async fn is_leader(&self) -> bool {
         let inner = self.inner.lock().await;
         inner.role() == RaftRole::Leader
+    }
+
+    pub async fn current_term(&self) -> i64 {
+        let inner = self.inner.lock().await;
+        inner.current_term()
+    }
+
+    pub async fn commit_index(&self) -> i64 {
+        let inner = self.inner.lock().await;
+        inner.commit_index()
     }
 
     pub async fn append_entries_with_index_and_backfill_entries(
@@ -93,7 +106,6 @@ impl RaftState {
         }
 
         let reply = r.unwrap();
-        // let reply = reply.into_inner();
         if reply.term > current_term {
             let mut inner = self.inner.lock().await;
             inner.set_role(RaftRole::Follower);

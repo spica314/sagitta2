@@ -19,9 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    let rng = thread_rng();
-    let rng2 = StdRng::from_rng(rng).unwrap();
-    let raft_state = RaftState::new(id, other_servers, rng2).await;
+    let raft_state = RaftState::new(id, other_servers).await;
 
     {
         let raft_state = raft_state.clone();

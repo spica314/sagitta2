@@ -1,0 +1,15 @@
+[package]
+name = "sagitta2-orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix = { workspace = true }
+actix-web = { workspace = true }
+clap = { workspace = true }
+env_logger = { workspace = true }
+prometheus-client = { workspace = true }
+tokio = { workspace = true }
+
+
+sagitta2-raft = { workspace = true }
