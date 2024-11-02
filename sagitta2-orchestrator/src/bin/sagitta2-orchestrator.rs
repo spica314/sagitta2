@@ -11,6 +11,7 @@ use actix_web::middleware::Compress;
 use actix_web::{web, App, HttpResponse, HttpServer, Result};
 use prometheus_client::encoding::text::encode;
 use prometheus_client::registry::Registry;
+use tracing_subscriber::EnvFilter;
 
 pub struct Metrics {
     is_leader: Gauge,
@@ -34,7 +35,11 @@ pub async fn metrics_handler(state: web::Data<Mutex<AppState>>) -> Result<HttpRe
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .init();
 
     let args: Vec<_> = std::env::args().collect();
     let id = args[1].parse::<i64>().unwrap();

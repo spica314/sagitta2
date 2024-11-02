@@ -4,10 +4,16 @@
 
 use rand::prelude::*;
 use sagitta2_raft::RaftState;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .init();
 
     let args: Vec<_> = std::env::args().collect();
     let id = args[1].parse::<i64>().unwrap();
@@ -36,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let r = raft_state.append_log(vec![vec![rng.gen::<u8>(); 10]]).await;
         if r.is_err() {
-            log::info!("append log failed: {:?}", r.err());
+            info!("append log failed: {:?}", r.err());
         }
     }
 }

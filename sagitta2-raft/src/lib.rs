@@ -1,6 +1,5 @@
 pub mod raft_state_inner;
 
-use log::{debug, error, info, warn};
 use rand::prelude::*;
 use sagitta2_raft::raft_client::RaftClient;
 use std::collections::HashMap;
@@ -9,6 +8,7 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};

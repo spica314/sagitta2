@@ -15,7 +15,7 @@ tonic = "0.12.3"
 prometheus-client = "0.22.3"
 prost = "0.13.3"
 rand = "0.8.5"
-log = "0.4.22"
-env_logger = "0.11.5"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["fmt", "env-filter"] }
 
 sagitta2-raft = { path = "sagitta2-raft" }
