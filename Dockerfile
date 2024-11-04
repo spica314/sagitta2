@@ -7,4 +7,4 @@ WORKDIR /app
 RUN cargo build --release
 
 FROM archlinux:base
-COPY --from=0 /app/target/release/* /usr/local/bin/
+COPY --from=0 /app/target/release/sagitta2-orchestrator /usr/local/bin/
