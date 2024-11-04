@@ -27,7 +27,7 @@ use raft_state_inner::RaftStateInner;
 #[derive(Debug, Clone)]
 pub struct RaftState {
     id: i64,
-    other_servers: Vec<(i64, String)>,
+    other_servers: Vec<String>,
 
     inner: Arc<Mutex<RaftStateInner>>,
 }
@@ -54,7 +54,7 @@ pub enum AppendEntriesWithIndexError {
 }
 
 impl RaftState {
-    pub async fn new(id: i64, other_servers: Vec<(i64, String)>) -> RaftState {
+    pub async fn new(id: i64, other_servers: Vec<String>) -> RaftState {
         let rng1 = thread_rng();
         let rng2 = StdRng::from_rng(rng1).unwrap();
 
@@ -318,7 +318,7 @@ impl RaftState {
         };
 
         let mut vote = 1;
-        for (_, server_addr) in &self.other_servers {
+        for server_addr in &self.other_servers {
             if let Ok(mut client) = RaftClient::connect(server_addr.clone()).await {
                 let r = self
                     .append_entries_with_index_and_backfill_entries(
@@ -404,7 +404,7 @@ impl RaftState {
 
             let mut votes = 1;
             let mut replies = HashMap::new();
-            for (id, addr) in self.other_servers.iter() {
+            for addr in self.other_servers.iter() {
                 if let Ok(mut client) = RaftClient::connect(addr.clone()).await {
                     let request = RequestVoteRequest {
                         term: current_term,
@@ -414,7 +414,7 @@ impl RaftState {
                     };
                     if let Ok(reply) = client.request_vote(request).await {
                         let reply = reply.into_inner();
-                        replies.insert(*id, reply);
+                        replies.insert(addr, reply);
                         if reply.vote_granted {
                             votes += 1;
                         }
@@ -448,7 +448,7 @@ impl RaftState {
                 let commit_index = inner.commit_index();
                 (current_term, last_log_index, last_log_term, commit_index)
             };
-            for (_, addr) in self.other_servers.iter() {
+            for addr in self.other_servers.iter() {
                 if let Ok(mut client) = RaftClient::connect(addr.clone()).await {
                     let request = AppendEntriesRequest {
                         term: current_term,

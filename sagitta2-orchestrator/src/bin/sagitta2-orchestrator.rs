@@ -43,13 +43,7 @@ async fn main() -> std::io::Result<()> {
 
     let args: Vec<_> = std::env::args().collect();
     let id = args[1].parse::<i64>().unwrap();
-    let other_servers = args[2..]
-        .iter()
-        .map(|s| {
-            let id = s.chars().last().unwrap().to_digit(10).unwrap() as i64;
-            (id, s.to_string())
-        })
-        .collect();
+    let other_servers = args[2..].to_vec();
 
     let raft_state = RaftState::new(id, other_servers).await;
 
