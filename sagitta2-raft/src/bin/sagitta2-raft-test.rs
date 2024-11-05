@@ -1,6 +1,6 @@
-// RUST_LOG=info cargo run -- 1 'http://[::1]:45002' 'http://[::1]:45003'
-// RUST_LOG=info cargo run -- 2 'http://[::1]:45001' 'http://[::1]:45003'
-// RUST_LOG=info cargo run -- 3 'http://[::1]:45001' 'http://[::1]:45002'
+// RUST_LOG=info cargo run -- 1 'http://127.0.0.1:45002' 'http://127.0.0.1:45003'
+// RUST_LOG=info cargo run -- 2 'http://127.0.0.1:45001' 'http://127.0.0.1:45003'
+// RUST_LOG=info cargo run -- 3 'http://127.0.0.1:45001' 'http://127.0.0.1:45002'
 
 use rand::prelude::*;
 use sagitta2_raft::RaftState;
@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let raft_state = raft_state.clone();
         tokio::spawn(async move {
-            let addr = format!("[::1]:4500{}", id).parse().unwrap();
+            let addr = format!("0.0.0.0:4500{}", id).parse().unwrap();
             raft_state.run(addr).await.unwrap();
         });
     }
