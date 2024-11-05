@@ -97,7 +97,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(state.clone())
             .service(web::resource("/metrics").route(web::get().to(metrics_handler)))
     })
-    .bind(("127.0.0.1", (8080 + id) as u16))?
+    .bind(("0.0.0.0", (8080 + id) as u16))?
     .run()
     .await
 }
