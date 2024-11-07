@@ -423,12 +423,23 @@ impl RaftState {
             }
 
             if votes > self.other_servers.len() / 2 {
-                let mut inner = self.inner.lock().await;
-                if inner.current_term() == current_term {
-                    inner.set_role(RaftRole::Leader);
-                    info!("id {} is now the leader", self.id);
-                } else {
-                    inner.set_role(RaftRole::Follower);
+                let mut become_leader = false;
+                {
+                    let mut inner = self.inner.lock().await;
+                    if inner.current_term() == current_term {
+                        inner.set_role(RaftRole::Leader);
+                        become_leader = true;
+                        info!("id {} is now the leader", self.id);
+                    } else {
+                        inner.set_role(RaftRole::Follower);
+                    }
+                }
+                if become_leader {
+                    if let Err(e) = self.append_log(vec![vec![]]).await {
+                        let mut inner = self.inner.lock().await;
+                        inner.set_role(RaftRole::Follower);
+                        error!("Failed to append log: {:?}", e);
+                    }
                 }
             } else {
                 let mut inner = self.inner.lock().await;
