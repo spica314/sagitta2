@@ -1,0 +1,8 @@
+[package]
+name = "sagitta2-lsm-tree"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

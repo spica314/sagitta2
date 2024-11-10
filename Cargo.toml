@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "sagitta2-lsm-tree",
     "sagitta2-orchestrator",
     "sagitta2-raft"
 ]
@@ -9,6 +9,7 @@ members = [
 actix = "0.13.5"
 actix-web = "4.9.0"
 clap = "4.5.20"
+tempfile = "3.14.0"
 tokio = { version = "1.41.0", features = ["macros", "rt-multi-thread"] }
 tonic-build = "0.12.3"
 tonic = "0.12.3"
