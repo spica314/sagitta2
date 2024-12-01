@@ -1,29 +1,69 @@
-use std::path::PathBuf;
+pub mod sstable_reader;
+pub mod sstable_writer;
 
-#[derive(Debug, Clone)]
-pub enum LSMTreeError {
-    Message(String),
-}
+// (random number)
+pub(crate) const MAGIC_NUMBER: u64 = 0x1847e2cbf5f372a0;
 
-pub struct LSMTree {
-    #[allow(dead_code)]
-    base_path: PathBuf,
-}
+pub(crate) const VERSION: u64 = 1;
 
-impl LSMTree {
-    pub fn new(base_path: PathBuf) -> Self {
-        LSMTree { base_path }
-    }
+pub(crate) const DATA_ITEM_ID: u8 = 0;
 
-    pub async fn put(&self, _key: Vec<u8>, _value: Vec<u8>) -> Result<(), LSMTreeError> {
-        Ok(())
-    }
+pub(crate) const INDEX_ITEM_ID: u8 = 1;
 
-    pub async fn get(&self, _key: Vec<u8>) -> Result<Option<Vec<u8>>, LSMTreeError> {
-        Ok(None)
-    }
+#[cfg(test)]
+mod test {
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
 
-    pub async fn delete(&self, _key: Vec<u8>) -> Result<(), LSMTreeError> {
-        Ok(())
+    use super::sstable_reader::*;
+    use super::sstable_writer::*;
+
+    #[tokio::test]
+    async fn test_sstable_writer_reader() {
+        let path = PathBuf::from("/tmp/test_writer_reader.sst");
+        if path.exists() {
+            tokio::fs::remove_file(&path).await.unwrap();
+        }
+        let config = SSTableWriterConfig {
+            index_branching_factor: 4,
+            bloom_filter_size: 1024,
+        };
+        let mut writer = SSTableWriter::new(path.clone(), config.clone())
+            .await
+            .unwrap();
+
+        let n = 1000;
+
+        let mut kv_expected = BTreeMap::new();
+        for i in 0..n {
+            let key = format!("key{}", i).as_bytes().to_vec();
+            let value = format!("value{}", i).as_bytes().to_vec();
+            kv_expected.insert(key.clone(), value.clone());
+        }
+
+        let begin_t = std::time::Instant::now();
+
+        for (key, value) in &kv_expected {
+            writer.put(key.clone(), value.clone()).await.unwrap();
+        }
+
+        writer.finish().await.unwrap();
+
+        let e = begin_t.elapsed();
+        eprintln!("write: {}", e.as_secs_f64());
+        eprintln!("write: {} ops / s", 1.0 / (e.as_secs_f64() / n as f64));
+
+        let begin_t = std::time::Instant::now();
+
+        let mut reader = SSTableReader::new(path.clone()).await.unwrap();
+        for (key, expected_value) in kv_expected.iter() {
+            // eprintln!("key = {:?}, expected = {:?}", key, expected_value);
+            let value = reader.get(key).await.unwrap().unwrap();
+            // eprintln!("value = {:?}", value);
+            assert_eq!(value, expected_value.as_slice());
+        }
+
+        let e = begin_t.elapsed();
+        eprintln!("read(seq): {}", e.as_secs_f64());
     }
 }

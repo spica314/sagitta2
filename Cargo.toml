@@ -10,7 +10,7 @@ actix = "0.13.5"
 actix-web = "4.9.0"
 clap = "4.5.21"
 tempfile = "3.14.0"
-tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
 tonic-build = "0.12.3"
 tonic = "0.12.3"
 prometheus-client = "0.22.3"
