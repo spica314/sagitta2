@@ -114,42 +114,45 @@ impl SSTableReader {
         self.file.read_exact(&mut item_header).await.unwrap();
         let item_header = u64::from_le_bytes(item_header);
 
-        // if item header is not DATA_ITEM_ID, panic
-        if item_header != DATA_ITEM_ID as u64 {
-            panic!("not data item");
+        if item_header == DATA_ITEM_ID as u64 {
+            // key length
+            let mut key_length = [0u8; 8];
+            self.file.read_exact(&mut key_length).await.unwrap();
+            let key_length = u64::from_le_bytes(key_length);
+
+            // value length
+            let mut value_length = [0u8; 8];
+            self.file.read_exact(&mut value_length).await.unwrap();
+            let value_length = u64::from_le_bytes(value_length);
+
+            // key
+            let mut item_key = vec![0u8; key_length as usize];
+            self.file.read_exact(&mut item_key).await.unwrap();
+
+            if key != item_key.as_slice() {
+                return Ok(None);
+            }
+
+            // skip padding
+            if key_length % 8 != 0 {
+                let padding = 8 - (key_length % 8);
+                self.file
+                    .seek(tokio::io::SeekFrom::Current(padding as i64))
+                    .await
+                    .unwrap();
+            }
+
+            // value
+            let mut item_value = vec![0u8; value_length as usize];
+            self.file.read_exact(&mut item_value).await.unwrap();
+
+            return Ok(Some(item_value));
         }
 
-        // key length
-        let mut key_length = [0u8; 8];
-        self.file.read_exact(&mut key_length).await.unwrap();
-        let key_length = u64::from_le_bytes(key_length);
-
-        // value length
-        let mut value_length = [0u8; 8];
-        self.file.read_exact(&mut value_length).await.unwrap();
-        let value_length = u64::from_le_bytes(value_length);
-
-        // key
-        let mut item_key = vec![0u8; key_length as usize];
-        self.file.read_exact(&mut item_key).await.unwrap();
-
-        if key != item_key.as_slice() {
+        if item_header == DELETE_DATA_ITEM_ID as u64 {
             return Ok(None);
         }
 
-        // skip padding
-        if key_length % 8 != 0 {
-            let padding = 8 - (key_length % 8);
-            self.file
-                .seek(tokio::io::SeekFrom::Current(padding as i64))
-                .await
-                .unwrap();
-        }
-
-        // value
-        let mut item_value = vec![0u8; value_length as usize];
-        self.file.read_exact(&mut item_value).await.unwrap();
-
-        Ok(Some(item_value))
+        panic!("unexpected item header: {}", item_header);
     }
 }

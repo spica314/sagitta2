@@ -33,6 +33,13 @@ use tokio::{
 // | 8 byte         | 8 byte         | 8 byte          | ... | % 8     | ...   | % 8     |
 // +----------------+----------------+-----------------+-----+---------+-------+---------+
 //
+// Delete Data Item
+// +----------------+----------------+-----+---------+
+// | Item Header    | Key Length     | Key | Padding |
+// +----------------+----------------+-----+---------+
+// | 8 byte         | 8 byte         | ... | % 8     |
+// +----------------+----------------+-----+---------+
+//
 // Index Item
 // +----------------+--------------+----------------+----------------+-----+----------------+--------------+-----+--------------+
 // | Item Header    | Item Length  | Children Count | Child Offset 1 | ... | Child Offset n | Key Offset 2 | ... | Key Offset n |
@@ -112,6 +119,31 @@ impl SSTableWriter {
         // padding
         if value.len() % 8 != 0 {
             let padding = 8 - (value.len() % 8);
+            self.writer.write_all(&vec![0; padding]).await?;
+        }
+
+        // add to index
+        self.add_to_index(key, item_offset as usize).await?;
+
+        Ok(())
+    }
+
+    pub async fn delete(&mut self, key: Vec<u8>) -> Result<(), std::io::Error> {
+        // check if offset is aligned to 8 bytes
+        let item_offset = self.writer.stream_position().await.unwrap();
+        assert!(item_offset % 8 == 0);
+
+        // Data Item Header
+        self.writer.write_u64_le(DELETE_DATA_ITEM_ID as u64).await?;
+
+        // key length
+        self.writer.write_u64_le(key.len() as u64).await?;
+
+        // key
+        self.writer.write_all(&key).await?;
+        // padding
+        if key.len() % 8 != 0 {
+            let padding = 8 - (key.len() % 8);
             self.writer.write_all(&vec![0; padding]).await?;
         }
 
