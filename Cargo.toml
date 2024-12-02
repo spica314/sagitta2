@@ -17,6 +17,6 @@ prometheus-client = "0.22.3"
 prost = "0.13.3"
 rand = "0.8.5"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.18", features = ["fmt", "env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
 
 sagitta2-raft = { path = "sagitta2-raft" }
