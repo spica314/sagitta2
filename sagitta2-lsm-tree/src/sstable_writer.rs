@@ -79,7 +79,7 @@ impl SSTableWriter {
         writer.write_u64_le(VERSION).await?;
         writer.write_u64_le(config.bloom_filter_size as u64).await?;
         writer.write_u64_le(0).await?;
-        writer.write_all(&vec![0; 4072]).await?;
+        writer.write_all(&vec![0; 4064]).await?;
 
         // Bloom Filter
         writer.write_all(&vec![0; config.bloom_filter_size]).await?;
