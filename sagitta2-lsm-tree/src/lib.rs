@@ -17,16 +17,16 @@ pub(crate) const DELETE_DATA_ITEM_ID: u8 = 1;
 pub(crate) const INDEX_ITEM_ID: u8 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DataIterItem {
+pub enum DataItem {
     Put { key: Vec<u8>, value: Vec<u8> },
     Delete { key: Vec<u8> },
 }
 
-impl DataIterItem {
+impl DataItem {
     pub fn key(&self) -> &[u8] {
         match self {
-            DataIterItem::Put { key, .. } => key,
-            DataIterItem::Delete { key } => key,
+            DataItem::Put { key, .. } => key,
+            DataItem::Delete { key } => key,
         }
     }
 }
@@ -39,7 +39,7 @@ mod test {
     use crate::sstable_sequential_reader::SSTableSequentialReader;
     use crate::wal_reader::WALReader;
     use crate::wal_writer::WALWriter;
-    use crate::DataIterItem;
+    use crate::DataItem;
 
     use super::sstable_reader::*;
     use super::sstable_writer::*;
@@ -192,9 +192,9 @@ mod test {
         let mut expected = vec![];
         for (i, (key, expected_value)) in kv_expected.iter().enumerate() {
             if (i as usize).count_ones() % 2 == 1 {
-                expected.push(DataIterItem::Delete { key: key.clone() });
+                expected.push(DataItem::Delete { key: key.clone() });
             } else {
-                expected.push(DataIterItem::Put {
+                expected.push(DataItem::Put {
                     key: key.clone(),
                     value: expected_value.clone(),
                 });
@@ -254,9 +254,9 @@ mod test {
         let mut expected = vec![];
         for (i, (key, expected_value)) in kv_expected.iter().enumerate() {
             if (i as usize).count_ones() % 2 == 1 {
-                expected.push(DataIterItem::Delete { key: key.clone() });
+                expected.push(DataItem::Delete { key: key.clone() });
             } else {
-                expected.push(DataIterItem::Put {
+                expected.push(DataItem::Put {
                     key: key.clone(),
                     value: expected_value.clone(),
                 });

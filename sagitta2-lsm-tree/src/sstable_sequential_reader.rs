@@ -27,7 +27,7 @@ impl SSTableSequentialReader {
         Ok(SSTableSequentialReader { file })
     }
 
-    pub async fn next(&mut self) -> Option<DataIterItem> {
+    pub async fn next(&mut self) -> Option<DataItem> {
         loop {
             // item header
             let mut item_header = [0u8; 8];
@@ -77,7 +77,7 @@ impl SSTableSequentialReader {
                         .unwrap();
                 }
 
-                return Some(DataIterItem::Put { key, value });
+                return Some(DataItem::Put { key, value });
             } else if item_header == DELETE_DATA_ITEM_ID as u64 {
                 // key length
                 let mut key_length = [0u8; 8];
@@ -97,7 +97,7 @@ impl SSTableSequentialReader {
                         .unwrap();
                 }
 
-                return Some(DataIterItem::Delete { key });
+                return Some(DataItem::Delete { key });
             } else {
                 assert_eq!(item_header, INDEX_ITEM_ID as u64);
                 // item length
