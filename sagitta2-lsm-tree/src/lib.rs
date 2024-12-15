@@ -1,3 +1,7 @@
+pub mod lsm_tree;
+pub mod lsm_tree_config;
+pub mod lsm_tree_state;
+pub mod memtable;
 pub mod sstable_reader;
 pub mod sstable_sequential_reader;
 pub mod sstable_writer;
