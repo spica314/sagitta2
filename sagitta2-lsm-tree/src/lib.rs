@@ -1,9 +1,12 @@
 pub mod sstable_reader;
 pub mod sstable_sequential_reader;
 pub mod sstable_writer;
+pub mod wal_reader;
+pub mod wal_writer;
 
 // (random number)
-pub(crate) const MAGIC_NUMBER: u64 = 0x1847e2cbf5f372a0;
+pub(crate) const SSTABLE_MAGIC_NUMBER: u64 = 0x1847e2cbf5f372a0;
+pub(crate) const WAL_MAGIC_NUMBER: u64 = 0xcc1e6a9e6b6c2000;
 
 pub(crate) const VERSION: u64 = 1;
 
@@ -34,6 +37,8 @@ mod test {
     use std::path::PathBuf;
 
     use crate::sstable_sequential_reader::SSTableSequentialReader;
+    use crate::wal_reader::WALReader;
+    use crate::wal_writer::WALWriter;
     use crate::DataIterItem;
 
     use super::sstable_reader::*;
@@ -184,6 +189,68 @@ mod test {
         eprintln!("write: {} ops / s", 1.0 / (e.as_secs_f64() / n as f64));
 
         let mut reader = SSTableSequentialReader::new(path.clone()).await.unwrap();
+        let mut expected = vec![];
+        for (i, (key, expected_value)) in kv_expected.iter().enumerate() {
+            if (i as usize).count_ones() % 2 == 1 {
+                expected.push(DataIterItem::Delete { key: key.clone() });
+            } else {
+                expected.push(DataIterItem::Put {
+                    key: key.clone(),
+                    value: expected_value.clone(),
+                });
+            }
+        }
+
+        let begin_t = std::time::Instant::now();
+
+        let mut results = vec![];
+        loop {
+            match reader.next().await {
+                Some(item) => {
+                    results.push(item);
+                }
+                None => break,
+            }
+        }
+
+        assert_eq!(results, expected);
+
+        let e = begin_t.elapsed();
+        eprintln!("read(seq): {}", e.as_secs_f64());
+    }
+
+    #[tokio::test]
+    async fn test_wal_writer_reader_1() {
+        let path = PathBuf::from("/tmp/test_wal_writer_reader_1.wal");
+        if path.exists() {
+            tokio::fs::remove_file(&path).await.unwrap();
+        }
+        let mut writer = WALWriter::new(path.clone()).await.unwrap();
+
+        let n = 1000;
+
+        let mut kv_expected = BTreeMap::new();
+        for i in 0..n {
+            let key = format!("key{}", i).as_bytes().to_vec();
+            let value = format!("value{}", i).as_bytes().to_vec();
+            kv_expected.insert(key.clone(), value.clone());
+        }
+
+        let begin_t = std::time::Instant::now();
+
+        for (i, (key, value)) in kv_expected.iter().enumerate() {
+            if (i as usize).count_ones() % 2 == 1 {
+                writer.delete(key.clone()).await.unwrap();
+            } else {
+                writer.put(key.clone(), value.clone()).await.unwrap();
+            }
+        }
+
+        let e = begin_t.elapsed();
+        eprintln!("write: {}", e.as_secs_f64());
+        eprintln!("write: {} ops / s", 1.0 / (e.as_secs_f64() / n as f64));
+
+        let mut reader = WALReader::new(path.clone()).await.unwrap();
         let mut expected = vec![];
         for (i, (key, expected_value)) in kv_expected.iter().enumerate() {
             if (i as usize).count_ones() % 2 == 1 {

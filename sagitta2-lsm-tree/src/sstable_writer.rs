@@ -16,7 +16,7 @@ use tokio::{
 // +----------------+----------------+-------------------+-------------------+-----------------+
 // | Magic Number   | Version        | Bloom Filter size | Root index offset | Padding         |
 // +----------------+----------------+-------------------+-------------------+-----------------+
-// | 8 byte         | 8 byte         | 8 byte            | 8 byte            | 4072 byte       |
+// | 8 byte         | 8 byte         | 8 byte            | 8 byte            | 4064 byte       |
 // +----------------+----------------+-------------------+-------------------+-----------------+
 //
 // Bloom Filter
@@ -75,7 +75,7 @@ impl SSTableWriter {
         let mut writer = BufWriter::new(file);
 
         // Header
-        writer.write_u64_le(MAGIC_NUMBER).await?;
+        writer.write_u64_le(SSTABLE_MAGIC_NUMBER).await?;
         writer.write_u64_le(VERSION).await?;
         writer.write_u64_le(config.bloom_filter_size as u64).await?;
         writer.write_u64_le(0).await?;
