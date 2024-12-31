@@ -1510,20 +1510,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sagitta2-orchestrator"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-web",
- "clap",
- "prometheus-client",
- "sagitta2-raft",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "sagitta2-raft"
 version = "0.1.0"
 dependencies = [
@@ -1532,6 +1518,20 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "sagitta2-state-db"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-web",
+ "clap",
+ "prometheus-client",
+ "sagitta2-raft",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
