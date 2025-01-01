@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [ 
+    "sagitta2-cluster-orchestrator",
     "sagitta2-lsm-tree",
     "sagitta2-raft",
-    "sagitta2-state-db",
 ]
 
 [workspace.dependencies]

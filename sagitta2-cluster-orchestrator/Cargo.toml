@@ -1,5 +1,5 @@
 [package]
-name = "sagitta2-state-db"
+name = "sagitta2-cluster-orchestrator"
 version = "0.1.0"
 edition = "2021"
 
